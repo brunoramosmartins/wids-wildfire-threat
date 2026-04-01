@@ -1,0 +1,29 @@
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  features: "data/features"
+  predictions: "data/predictions"
+  models: "models"
+  submissions: "submissions"
+  reports: "reports"
+
+raw_files:
+  train: "train.csv"
+  test: "test.csv"
+  sample_submission: "sample_submission.csv"
+
+processed_files:
+  train: "train_processed.parquet"
+  test: "test_processed.parquet"
+
+feature_files:
+  train: "train_features.parquet"
+  test: "test_features.parquet"
+
+# TBD after data inspection
+target_column: null
+id_column: null
+
+column_dtypes: {}
+
+null_strategies: {}

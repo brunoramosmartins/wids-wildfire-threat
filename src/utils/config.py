@@ -14,4 +14,5 @@ import yaml
 def load_config(path: Path | str) -> dict[str, Any]:
     """Load a YAML configuration file."""
     with open(path) as f:
-        return yaml.safe_load(f)
+        config: dict[str, Any] = yaml.safe_load(f)
+        return config

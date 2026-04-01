@@ -26,18 +26,22 @@ echo "============================================"
 echo "  Creating Issues for: ${REPO}"
 echo "============================================"
 
-# Helper: get milestone number by title substring
-get_milestone() {
-  local phase_num="$1"
-  gh api "repos/${REPO}/milestones" --jq ".[] | select(.title | startswith(\"Phase ${phase_num}\")) | .number"
-}
+# Milestone titles (hardcoded to avoid WSL/Windows gh api --jq issues)
+MS0="Phase 0 — Setup & Alignment"
+MS1="Phase 1 — EDA & Data Understanding"
+MS2="Phase 2 — Data Processing Pipeline"
+MS3="Phase 3 — Feature Engineering"
+MS4="Phase 4 — Baseline Model"
+MS5="Phase 5 — Advanced Modeling"
+MS6="Phase 6 — Optimization & Ensembles"
+MS7="Phase 7 — Observability"
+MS8="Phase 8 — Portfolio Polish"
 
 # ============================================================================
 # PHASE 0 ISSUES
 # ============================================================================
 echo ""
 echo ">>> Phase 0 — Setup & Alignment"
-MS0=$(get_milestone "0")
 
 gh issue create --repo "${REPO}" \
   --title "feat: initialize repository and CI scaffold" \
@@ -153,7 +157,6 @@ echo "  ✅ Issue #4 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 1 — EDA & Data Understanding"
-MS1=$(get_milestone "1")
 
 gh issue create --repo "${REPO}" \
   --title "feat: create dataset overview EDA notebook" \
@@ -238,7 +241,6 @@ echo "  ✅ Issue #7 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 2 — Data Processing Pipeline"
-MS2=$(get_milestone "2")
 
 gh issue create --repo "${REPO}" \
   --title "feat: define data schemas and column contracts" \
@@ -322,7 +324,6 @@ echo "  ✅ Issue #10 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 3 — Feature Engineering"
-MS3=$(get_milestone "3")
 
 gh issue create --repo "${REPO}" \
   --title "docs: design feature catalog" \
@@ -426,7 +427,6 @@ echo "  ✅ Issue #14 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 4 — Baseline Model"
-MS4=$(get_milestone "4")
 
 gh issue create --repo "${REPO}" \
   --title "feat: implement validation strategy and training orchestrator" \
@@ -531,7 +531,6 @@ echo "  ✅ Issue #18 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 5 — Advanced Modeling"
-MS5=$(get_milestone "5")
 
 gh issue create --repo "${REPO}" \
   --title "feat: implement survival analysis models" \
@@ -618,7 +617,6 @@ echo "  ✅ Issue #21 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 6 — Optimization & Ensembles"
-MS6=$(get_milestone "6")
 
 gh issue create --repo "${REPO}" \
   --title "feat: implement hyperparameter tuning" \
@@ -702,7 +700,6 @@ echo "  ✅ Issue #24 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 7 — Observability"
-MS7=$(get_milestone "7")
 
 gh issue create --repo "${REPO}" \
   --title "feat: implement structured logging across pipeline" \
@@ -785,7 +782,6 @@ echo "  ✅ Issue #27 created"
 # ============================================================================
 echo ""
 echo ">>> Phase 8 — Portfolio Polish"
-MS8=$(get_milestone "8")
 
 gh issue create --repo "${REPO}" \
   --title "docs: write portfolio-grade README and runbook" \

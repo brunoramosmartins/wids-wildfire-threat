@@ -1,0 +1,15 @@
+logging:
+  level: "INFO"
+  format: "json"
+  output: "stdout"
+
+structlog:
+  processors:
+    - add_log_level
+    - add_logger_name
+    - TimeStamper
+    - JSONRenderer
+  context_class: "dict"
+  logger_factory: "PrintLoggerFactory"
+  wrapper_class: "BoundLogger"
+  cache_logger_on_first_use: true

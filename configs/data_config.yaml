@@ -11,6 +11,7 @@ raw_files:
   train: "train.csv"
   test: "test.csv"
   sample_submission: "sample_submission.csv"
+  metadata: "metaData.csv"
 
 processed_files:
   train: "train_processed.parquet"
@@ -20,10 +21,62 @@ feature_files:
   train: "train_features.parquet"
   test: "test_features.parquet"
 
-# TBD after data inspection
-target_column: null
-id_column: null
+target_column: "time_to_hit_hours"
+event_column: "event"
+id_column: "event_id"
 
-column_dtypes: {}
+submission_horizons: [12, 24, 48, 72]
+submission_columns: ["event_id", "prob_12h", "prob_24h", "prob_48h", "prob_72h"]
 
-null_strategies: {}
+feature_groups:
+  temporal_coverage:
+    - num_perimeters_0_5h
+    - dt_first_last_0_5h
+    - low_temporal_resolution_0_5h
+
+  growth:
+    - area_first_ha
+    - area_growth_abs_0_5h
+    - area_growth_rel_0_5h
+    - area_growth_rate_ha_per_h
+    - log1p_area_first
+    - log1p_growth
+    - log_area_ratio_0_5h
+    - relative_growth_0_5h
+    - radial_growth_m
+    - radial_growth_rate_m_per_h
+
+  centroid_kinematics:
+    - centroid_displacement_m
+    - centroid_speed_m_per_h
+    - spread_bearing_deg
+    - spread_bearing_sin
+    - spread_bearing_cos
+
+  distance:
+    - dist_min_ci_0_5h
+    - dist_std_ci_0_5h
+    - dist_change_ci_0_5h
+    - dist_slope_ci_0_5h
+    - closing_speed_m_per_h
+    - closing_speed_abs_m_per_h
+    - projected_advance_m
+    - dist_accel_m_per_h2
+    - dist_fit_r2_0_5h
+
+  directionality:
+    - alignment_cos
+    - alignment_abs
+    - cross_track_component
+    - along_track_speed
+
+  temporal_metadata:
+    - event_start_hour
+    - event_start_dayofweek
+    - event_start_month
+
+# Highly correlated pairs to consider dropping one from each
+redundant_pairs:
+  - ["area_growth_rel_0_5h", "relative_growth_0_5h"]
+  - ["closing_speed_m_per_h", "closing_speed_abs_m_per_h"]
+  - ["radial_growth_m", "radial_growth_rate_m_per_h"]

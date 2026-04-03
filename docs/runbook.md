@@ -23,7 +23,7 @@ make pipeline
 
 | Step | Command | Input | Output |
 |------|---------|-------|--------|
-| Install | `make install` | `requirements.txt` | Virtual environment ready |
+| Install | `make install` | `pyproject.toml` | Editable install with dev deps |
 | Process | `make process` | `data/raw/*.csv` | `data/processed/*.parquet` |
 | Features | `make features` | `data/processed/*.parquet` | `data/features/*.parquet` |
 | Train | `make train` | `data/features/train_features.parquet` | Model in `models/` |

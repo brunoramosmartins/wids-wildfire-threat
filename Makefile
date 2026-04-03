@@ -1,7 +1,7 @@
 .PHONY: install lint test process features train predict evaluate submit pipeline clean
 
 install:
-	pip install -r requirements.txt
+	pip install -e ".[dev]"
 	pre-commit install
 
 lint:

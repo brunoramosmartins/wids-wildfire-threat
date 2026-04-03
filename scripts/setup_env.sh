@@ -18,8 +18,8 @@ source "$VENV_DIR/bin/activate" 2>/dev/null || source "$VENV_DIR/Scripts/activat
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-echo "Installing dependencies..."
-pip install -r requirements.txt
+echo "Installing project in editable mode with dev dependencies..."
+pip install -e ".[dev]"
 
 echo "Setting up pre-commit hooks..."
 pre-commit install

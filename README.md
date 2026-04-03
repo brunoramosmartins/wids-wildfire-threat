@@ -3,7 +3,7 @@
 > Predicting Time-to-Threat for Evacuation Zones Using Survival Analysis
 
 [![CI](https://github.com/brunoramosmartins/wids-wildfire-threat/actions/workflows/ci.yml/badge.svg)](https://github.com/brunoramosmartins/wids-wildfire-threat/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Overview
@@ -69,7 +69,7 @@ wids-wildfire-threat/
 
 | Layer | Tool |
 |-------|------|
-| Language | Python 3.11+ |
+| Language | Python 3.10+ |
 | ML (classical) | scikit-learn, XGBoost, LightGBM |
 | ML (survival) | lifelines, scikit-survival |
 | Data | pandas, polars, Parquet |
@@ -82,7 +82,7 @@ wids-wildfire-threat/
 ## Development
 
 ```bash
-make install    # Install deps + pre-commit hooks
+make install    # pip install -e ".[dev]" + pre-commit hooks
 make lint       # ruff + mypy
 make test       # pytest
 make clean      # Remove __pycache__

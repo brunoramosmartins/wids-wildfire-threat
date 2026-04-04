@@ -13,10 +13,12 @@ from src.data.validate import (
 
 def _make_df() -> pd.DataFrame:
     """Create a small test DataFrame."""
-    return pd.DataFrame({
-        "a": pd.array([1, 2, 3], dtype="int64"),
-        "b": pd.array([1.0, 2.0, 3.0], dtype="float64"),
-    })
+    return pd.DataFrame(
+        {
+            "a": pd.array([1, 2, 3], dtype="int64"),
+            "b": pd.array([1.0, 2.0, 3.0], dtype="float64"),
+        }
+    )
 
 
 # --- validate_schema ---

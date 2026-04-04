@@ -1,0 +1,29 @@
+engineered_features:
+  geospatial:
+    - threat_score
+    - projected_arrival_h
+    - is_closing
+    - dist_min_log
+    - dist_bin
+    - advance_ratio
+    - alignment_x_speed
+    - is_growing
+    - growth_x_proximity
+    - speed_x_growth
+
+  temporal:
+    - hour_sin
+    - hour_cos
+    - month_sin
+    - month_cos
+    - is_daytime
+    - is_weekend
+
+redundant_columns:
+  - relative_growth_0_5h
+  - closing_speed_abs_m_per_h
+  - radial_growth_rate_m_per_h
+
+selection:
+  mi_threshold: 0.01
+  correlation_threshold: 0.95

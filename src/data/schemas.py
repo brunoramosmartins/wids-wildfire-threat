@@ -64,9 +64,7 @@ TEST_SCHEMA: dict[str, str] = {**_FEATURE_SCHEMA}
 # Column lists
 REQUIRED_COLUMNS: list[str] = list(_FEATURE_SCHEMA.keys())
 
-NUMERIC_COLUMNS: list[str] = [
-    col for col, dtype in _FEATURE_SCHEMA.items() if col != "event_id"
-]
+NUMERIC_COLUMNS: list[str] = [col for col, dtype in _FEATURE_SCHEMA.items() if col != "event_id"]
 
 CATEGORICAL_COLUMNS: list[str] = []
 

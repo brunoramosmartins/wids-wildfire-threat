@@ -53,9 +53,7 @@ def validate_nulls(df: pd.DataFrame, required_columns: list[str]) -> bool:
     return valid
 
 
-def validate_ranges(
-    df: pd.DataFrame, valid_ranges: dict[str, tuple[float, float]]
-) -> bool:
+def validate_ranges(df: pd.DataFrame, valid_ranges: dict[str, tuple[float, float]]) -> bool:
     """Check that numeric columns are within expected bounds."""
     valid = True
     for col, (low, high) in valid_ranges.items():
@@ -77,9 +75,7 @@ def validate_ranges(
     return valid
 
 
-def validate_row_count(
-    df: pd.DataFrame, expected_count: int, tolerance: float = 0.01
-) -> bool:
+def validate_row_count(df: pd.DataFrame, expected_count: int, tolerance: float = 0.01) -> bool:
     """Check that row count is within tolerance of expected count."""
     actual = len(df)
     delta = abs(actual - expected_count) / expected_count if expected_count > 0 else 0

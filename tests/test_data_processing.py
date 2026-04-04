@@ -1,14 +1,26 @@
-"""Tests for data processing pipeline."""
+"""Tests for data processing pipeline.
+
+These tests require raw data files in data/raw/ and are skipped in CI
+where those files are not available (Kaggle data is not committed).
+"""
 
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.data.process import process_test, process_train
 from src.data.schemas import TEST_SCHEMA, TRAIN_SCHEMA
 
+_RAW_DATA_AVAILABLE = Path("data/raw/train.csv").exists()
+_skip_no_data = pytest.mark.skipif(
+    not _RAW_DATA_AVAILABLE,
+    reason="Raw data files not present (Kaggle data not committed to repo)",
+)
 
-def test_process_creates_parquet_files(tmp_path: Path, monkeypatch: object) -> None:
+
+@_skip_no_data
+def test_process_creates_parquet_files() -> None:
     """Pipeline produces both Parquet output files."""
     process_train()
     process_test()
@@ -16,6 +28,7 @@ def test_process_creates_parquet_files(tmp_path: Path, monkeypatch: object) -> N
     assert Path("data/processed/test_processed.parquet").exists()
 
 
+@_skip_no_data
 def test_train_schema_matches() -> None:
     """Processed train dtypes match TRAIN_SCHEMA."""
     process_train()
@@ -26,6 +39,7 @@ def test_train_schema_matches() -> None:
         )
 
 
+@_skip_no_data
 def test_test_schema_matches() -> None:
     """Processed test dtypes match TEST_SCHEMA."""
     process_test()
@@ -36,6 +50,7 @@ def test_test_schema_matches() -> None:
         )
 
 
+@_skip_no_data
 def test_row_counts_preserved() -> None:
     """Processed datasets have same row counts as raw."""
     process_train()
@@ -48,6 +63,7 @@ def test_row_counts_preserved() -> None:
     assert len(proc_test) == len(raw_test)
 
 
+@_skip_no_data
 def test_idempotency() -> None:
     """Running pipeline twice produces identical output."""
     process_train()

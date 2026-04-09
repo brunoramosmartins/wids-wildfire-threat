@@ -38,6 +38,29 @@ models:
   random_survival_forest:
     n_estimators: 100
     max_depth: null
+    min_samples_split: 6
+    min_samples_leaf: 3
+
+  gradient_boosted_survival:
+    n_estimators: 150
+    learning_rate: 0.08
+    max_depth: 3
+    subsample: 0.9
+
+  catboost:
+    iterations: 400
+    depth: 6
+    learning_rate: 0.08
+    l2_leaf_reg: 3.0
+
+advanced:
+  models:
+    - cox_ph
+    - random_survival_forest
+    - gradient_boosted_survival
+    - xgboost
+    - lightgbm
+    - catboost
 
 ensemble:
   method: "weighted_average"  # Options: weighted_average, stacking, blending

@@ -123,6 +123,16 @@ Per EDA correlation analysis (|r| > 0.95):
 - Engineered features: 16
 - **Total: 47 features**
 
-## Feature Selection Results
+## Feature Selection (Phase 5)
 
-Populated after `notebooks/04_feature_analysis.ipynb` execution with mutual information scores and importance ranking.
+Automated ranking and subset evaluation (see `src/features/selection.py`):
+
+| Method | Role | Output artifact |
+|--------|------|-----------------|
+| **Permutation importance** | Global ranking with RandomForest on 72h hit label | `reports/data_quality/permutation_importance.csv` (after `make features-select`) |
+| **RFE** | Recursive elimination to a target feature count | `reports/data_quality/rfe_features.txt` |
+| **Top-N CV** | Compare RandomForest multi-horizon with top 20 / 30 / 50 features | `reports/data_quality/subset_cv_summary.md` |
+
+**Keep / drop policy:** Start from permutation ranking; drop the weaker feature in each highly correlated pair (see `find_correlated_pairs`). After running subset CV, prefer the smallest N whose **mean CV Brier** is within ~1σ of the full set. Update this section when you lock a feature list for ensembles (Phase 6).
+
+Older EDA: `notebooks/04_feature_analysis.ipynb` for MI scores and importance plots.

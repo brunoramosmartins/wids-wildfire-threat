@@ -62,6 +62,31 @@ def compute_metrics(
             pass
 
     metrics["brier_mean"] = float(np.mean(brier_scores))
+
+    # Concordance index (IPCW-free): higher predicted P(hit by 72h) ⇒ higher event risk
+    try:
+        from sksurv.metrics import concordance_index_censored
+
+        ev = y_true["event"].values.astype(bool)
+        tt = y_true["time_to_hit_hours"].values.astype(float)
+        risk = y_pred["prob_72h"].values.astype(float)
+        ci, *_ = concordance_index_censored(ev, tt, risk)
+        metrics["c_index"] = float(ci)
+    except Exception:
+        pass
+
+    # Calibration gap at 72h (mean |fraction positive − mean pred| per quantile bin)
+    try:
+        from sklearn.calibration import calibration_curve
+
+        label72 = ((E == 1) & (T <= 72)).astype(int)
+        pred72 = y_pred["prob_72h"].values.astype(float)
+        if len(np.unique(label72)) > 1 and len(label72) >= 40:
+            frac_pos, mean_pred = calibration_curve(label72, pred72, n_bins=8, strategy="quantile")
+            metrics["calibration_gap_72h"] = float(np.mean(np.abs(frac_pos - mean_pred)))
+    except Exception:
+        pass
+
     return metrics
 
 
@@ -123,16 +148,28 @@ def generate_report(
         ll = metrics.get(f"logloss_{h}h", float("nan"))
         lines.append(f"| {h}h | {brier:.4f} | {auc:.4f} | {ll:.4f} |")
 
-    lines.extend(
-        [
-            "",
-            "## Aggregate",
-            "",
-            f"- **Mean Brier Score:** {metrics.get('brier_mean', float('nan')):.4f}",
-            "",
-            "Lower Brier score is better (0 = perfect, 0.25 = random for balanced classes).",
-        ]
-    )
+    agg_lines = [
+        "",
+        "## Aggregate",
+        "",
+        f"- **Mean Brier Score:** {metrics.get('brier_mean', float('nan')):.4f}",
+        "",
+        "Lower Brier score is better (0 = perfect, 0.25 = random for balanced classes).",
+    ]
+    if "c_index" in metrics:
+        agg_lines.extend(
+            [
+                "",
+                f"- **Harrell C-index (risk = prob_72h):** {metrics['c_index']:.4f}",
+                "  (1.0 = perfect discrimination on censored outcomes; 0.5 ≈ random.)",
+            ]
+        )
+    if "calibration_gap_72h" in metrics:
+        agg_lines.append(
+            f"- **Calibration gap (72h, decile-weighted):** "
+            f"{metrics['calibration_gap_72h']:.4f} (lower is better)"
+        )
+    lines.extend(agg_lines)
 
     path = output_dir / f"evaluation_{model_name}.md"
     path.write_text("\n".join(lines), encoding="utf-8")

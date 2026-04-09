@@ -55,19 +55,31 @@ def validate_submission(df: pd.DataFrame, expected_ids: pd.Series | None = None)
     logger.info("submission_valid", rows=len(df))
 
 
+def _default_submit_model() -> str:
+    marker = Path("models/phase5_best_model.txt")
+    if marker.is_file():
+        name = marker.read_text(encoding="utf-8").strip()
+        if name:
+            return name
+    return "random_forest"
+
+
 def format_submission(
-    model_name: str = "random_forest",
+    model_name: str | None = None,
     output_path: Path | str | None = None,
 ) -> Path:
     """Format predictions into Kaggle submission CSV.
 
     Args:
-        model_name: Name of model whose predictions to format.
+        model_name: Model whose predictions to format. If None, uses
+            ``models/phase5_best_model.txt`` when present, else ``random_forest``.
         output_path: Override output path. If None, auto-generates with date.
 
     Returns:
         Path to the submission CSV file.
     """
+    if model_name is None:
+        model_name = _default_submit_model()
     data_config = load_config(Path("configs/data_config.yaml"))
     id_col = data_config["id_column"]
 

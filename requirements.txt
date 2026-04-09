@@ -4,6 +4,7 @@ polars>=0.20.0
 scikit-learn>=1.4.0
 xgboost>=2.0.0
 lightgbm>=4.2.0
+catboost>=1.2.0
 lifelines>=0.28.0
 scikit-survival>=0.23.0
 mlflow>=2.10.0

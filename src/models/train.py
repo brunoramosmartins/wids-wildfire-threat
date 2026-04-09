@@ -7,8 +7,9 @@ trains baseline models, evaluates, and logs results.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 import pandas as pd
@@ -26,6 +27,14 @@ from src.utils.io import read_parquet
 from src.utils.reproducibility import set_seed
 
 logger = setup_logger(__name__)
+
+
+class HorizonPredictor(Protocol):
+    """Models used in train.py expose fit + per-horizon probabilities."""
+
+    def fit(self, X: pd.DataFrame, y: pd.DataFrame, **kwargs: Any) -> Any: ...
+
+    def predict_proba_horizons(self, X: pd.DataFrame) -> pd.DataFrame: ...
 
 
 def _get_feature_and_target(
@@ -46,7 +55,7 @@ def _get_feature_and_target(
 
 
 def _cross_validate(
-    model_factory: Any,
+    model_factory: Callable[[], HorizonPredictor],
     model_name: str,
     X: pd.DataFrame,
     y: pd.DataFrame,
@@ -115,7 +124,7 @@ def train_model() -> None:
     )
 
     # Define baseline models
-    baselines = {
+    baselines: dict[str, tuple[Callable[[], HorizonPredictor], dict[str, Any]]] = {
         "kaplan_meier": (get_kaplan_meier_baseline, {"type": "kaplan_meier"}),
         "logistic_regression": (
             get_logistic_baseline,

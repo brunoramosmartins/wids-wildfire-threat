@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import mlflow
+import pandas as pd
 
 from src.observability.logger import setup_logger
 from src.utils.config import load_config
@@ -17,15 +18,28 @@ from src.utils.io import read_parquet, write_parquet
 logger = setup_logger(__name__)
 
 
-def predict(model_name: str = "random_forest") -> Path:
+def _default_model_name() -> str:
+    """Prefer Phase 5 selector file when present; else baseline default."""
+    marker = Path("models/phase5_best_model.txt")
+    if marker.is_file():
+        name = marker.read_text(encoding="utf-8").strip()
+        if name:
+            return name
+    return "random_forest"
+
+
+def predict(model_name: str | None = None) -> Path:
     """Generate predictions on test set using a trained MLflow model.
 
     Args:
-        model_name: Name of the MLflow run to load the model from.
+        model_name: MLflow run name. If omitted, uses ``models/phase5_best_model.txt``
+            when present, otherwise ``random_forest``.
 
     Returns:
         Path to the saved predictions Parquet file.
     """
+    if model_name is None:
+        model_name = _default_model_name()
     config = load_config(Path("configs/model_config.yaml"))
     data_config = load_config(Path("configs/data_config.yaml"))
 
@@ -48,12 +62,17 @@ def predict(model_name: str = "random_forest") -> Path:
     if experiment is None:
         raise RuntimeError(f"MLflow experiment '{experiment_name}' not found. Run training first.")
 
-    runs = mlflow.search_runs(
+    runs_raw = mlflow.search_runs(
         experiment_ids=[experiment.experiment_id],
         filter_string=f"tags.mlflow.runName = '{model_name}'",
         order_by=["start_time DESC"],
         max_results=1,
     )
+    if not isinstance(runs_raw, pd.DataFrame):
+        raise TypeError(
+            "mlflow.search_runs must return a pandas DataFrame; " f"got {type(runs_raw).__name__}"
+        )
+    runs = runs_raw
 
     if runs.empty:
         raise RuntimeError(f"No MLflow run found for model '{model_name}'")

@@ -43,9 +43,14 @@ notebook = [
     "jupyter>=1.0.0",
     "nbconvert>=7.0.0",
 ]
+# Foundation model for small tabular data (Phase 6.5). Pulls PyTorch (~500MB).
+# Pinned to v2 — v7+ requires a Prior Labs license/API key.
+advanced = [
+    "tabpfn>=2.0,<3.0",
+]
 # Convenience: install everything at once
 all = [
-    "wids-wildfire-threat[dev,notebook]",
+    "wids-wildfire-threat[dev,notebook,advanced]",
 ]
 
 [tool.ruff]
@@ -61,6 +66,9 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "tests/test_model_pipeline.py" = ["N803", "N806"]
 "tests/test_phase5_models.py" = ["N803", "N806"]
 "tests/test_ensemble.py" = ["N803", "N806"]
+"tests/test_evaluate.py" = ["N803", "N806"]
+"tests/test_phase6_5_models.py" = ["N803", "N806"]
+"src/validation/*.py" = ["N803", "N806", "E731"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -98,7 +98,12 @@ def test_compute_metrics_returns_brier() -> None:
     model.fit(X, y)
     preds = model.predict_proba_horizons(X)
     metrics = compute_metrics(y, preds)
+    # Legacy naive-Brier keys (diagnostic)
     assert "brier_mean" in metrics
     assert 0 <= metrics["brier_mean"] <= 1
     for h in [12, 24, 48, 72]:
-        assert f"brier_{h}h" in metrics
+        assert f"brier_{h}h_naive" in metrics
+    # Official WiDS 2026 metric (primary)
+    assert "hybrid_score" in metrics
+    assert "weighted_brier" in metrics
+    assert "c_index" in metrics

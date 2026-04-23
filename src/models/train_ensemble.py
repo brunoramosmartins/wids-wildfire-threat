@@ -27,8 +27,10 @@ import mlflow
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
+from src.models.aft import get_lognormal_aft_model, get_weibull_aft_model
 from src.models.baselines import HORIZONS
 from src.models.boosting import get_xgboost_model
+from src.models.calibration import IsotonicHorizonCalibrator
 from src.models.ensemble import (
     BlendingEnsemble,
     StackingEnsemble,
@@ -37,6 +39,7 @@ from src.models.ensemble import (
     weighted_average,
 )
 from src.models.evaluate import compute_metrics, evaluate_model
+from src.models.seed_ensemble import SeedEnsembleWrapper
 from src.models.survival import get_gbs_model, get_rsf_model
 from src.models.train import HorizonPredictor, _get_feature_and_target
 from src.observability.logger import setup_logger
@@ -48,11 +51,36 @@ logger = setup_logger(__name__)
 
 PROB_COLS = [f"prob_{h}h" for h in HORIZONS]
 
+
+def _get_tabpfn_factory() -> Callable[..., HorizonPredictor] | None:
+    """Lazy import — tabpfn is in the optional [advanced] extra.
+
+    ``get_tabpfn_model`` returns a ``TabPFNHorizonModel`` that structurally
+    satisfies the ``HorizonPredictor`` protocol (fit + predict_proba_horizons).
+    We cast because mypy can't see the structural match through the narrow
+    concrete return type.
+    """
+    from typing import cast
+
+    try:
+        from src.models.tabpfn_wrapper import get_tabpfn_model
+
+        return cast(Callable[..., HorizonPredictor], get_tabpfn_model)
+    except ImportError:
+        return None
+
+
 _DEFAULT_FACTORIES: dict[str, Callable[..., HorizonPredictor]] = {
     "gradient_boosted_survival": get_gbs_model,
     "random_survival_forest": get_rsf_model,
     "xgboost": get_xgboost_model,
+    "weibull_aft": get_weibull_aft_model,
+    "lognormal_aft": get_lognormal_aft_model,
 }
+
+_tabpfn = _get_tabpfn_factory()
+if _tabpfn is not None:
+    _DEFAULT_FACTORIES["tabpfn"] = _tabpfn
 
 
 def _resolve_factory(
@@ -60,16 +88,51 @@ def _resolve_factory(
     tuned_params: dict[str, Any] | None,
     model_defaults: dict[str, Any],
     seed: int,
+    seed_ensemble_cfg: dict[str, Any] | None = None,
+    feature_names: list[str] | None = None,
 ) -> Callable[[], HorizonPredictor]:
-    """Build a zero-arg factory for ``model_name`` using tuned > defaults."""
+    """Build a zero-arg factory for ``model_name`` using tuned > defaults.
+
+    If ``seed_ensemble_cfg['enabled']`` is truthy, the returned factory
+    wraps the base model in a ``SeedEnsembleWrapper`` with the configured
+    seeds. AFT/TabPFN are not wrapped (expensive or deterministic).
+
+    If ``feature_names`` is provided and the model is XGBoost / LightGBM,
+    the factory injects ``feature_names`` so monotone constraints kick in.
+    """
     base_fn = _DEFAULT_FACTORIES[model_name]
     if tuned_params and model_name in tuned_params:
         params = dict(tuned_params[model_name].get("best_params", {}))
     else:
         params = dict(model_defaults.get(model_name, {}))
-    params.setdefault("random_state", seed)
-    # Strip any keys not accepted by the factory (defensive)
-    return lambda: base_fn(**params)
+    # Stochastic models accept random_state; parametric AFTs do not.
+    _STOCHASTIC = {
+        "gradient_boosted_survival",
+        "random_survival_forest",
+        "xgboost",
+        "lightgbm",
+        "catboost",
+        "tabpfn",
+    }
+    if model_name in _STOCHASTIC:
+        params.setdefault("random_state", seed)
+    if feature_names is not None and model_name in {"xgboost", "lightgbm"}:
+        params.setdefault("feature_names", feature_names)
+
+    def _base_factory() -> HorizonPredictor:
+        return base_fn(**params)
+
+    # Wrap in SeedEnsemble for models that benefit from seed-averaging
+    # (exclude AFT — deterministic — and TabPFN — expensive).
+    wrappable = {"gradient_boosted_survival", "random_survival_forest", "xgboost"}
+    if seed_ensemble_cfg and seed_ensemble_cfg.get("enabled") and model_name in wrappable:
+        seeds = list(seed_ensemble_cfg.get("seeds", [42, 123, 2024, 7, 99]))
+
+        def _seeded_factory() -> HorizonPredictor:
+            return SeedEnsembleWrapper(_base_factory, seeds=seeds)
+
+        return _seeded_factory
+    return _base_factory
 
 
 def _oof_predictions(
@@ -140,6 +203,8 @@ def run_ensembling() -> dict[str, Any]:
         raise ValueError("No ensemble members in configs/model_config.yaml")
 
     model_defaults = config.get("models", {})
+    seed_ensemble_cfg = ensemble_cf.get("seed_ensemble", {})
+    calibrate_output = bool(ensemble_cf.get("calibrate_output", False))
 
     # Load tuned params (if available)
     tuned_path = Path("models/tuned_params.json")
@@ -182,7 +247,14 @@ def run_ensembling() -> dict[str, Any]:
         if member not in _DEFAULT_FACTORIES:
             logger.warning("unknown_member_skipped", model=member)
             continue
-        factory = _resolve_factory(member, tuned_params, model_defaults, seed)
+        factory = _resolve_factory(
+            member,
+            tuned_params,
+            model_defaults,
+            seed,
+            seed_ensemble_cfg,
+            feature_names=feature_cols,
+        )
         logger.info("ensemble_member_oof", model=member)
         oof = _oof_predictions(factory, X, y, n_splits, seed)
         oof_preds[member] = oof
@@ -203,9 +275,9 @@ def run_ensembling() -> dict[str, Any]:
     oof_list = [oof_preds[m] for m in member_names]
     test_list = [test_preds[m] for m in member_names]
 
-    # Step 2: weighted-average ensemble
+    # Step 2: weighted-average ensemble (weights optimized to MAXIMIZE Hybrid)
     logger.info("optimizing_weights")
-    weights = optimize_weights(oof_list, y, seed=seed)
+    weights = optimize_weights(oof_list, y, seed=seed, objective="hybrid")
     weights_dict = dict(zip(member_names, weights.tolist(), strict=True))
     wa_oof = weighted_average(oof_list, weights.tolist())
     wa_test = weighted_average(test_list, weights.tolist())
@@ -214,7 +286,8 @@ def run_ensembling() -> dict[str, Any]:
     logger.info(
         "weighted_average_done",
         weights={k: round(v, 4) for k, v in weights_dict.items()},
-        brier_oof=round(wa_metrics["brier_mean"], 5),
+        hybrid_oof=round(wa_metrics["hybrid_score"], 5),
+        weighted_brier_oof=round(wa_metrics["weighted_brier"], 5),
     )
 
     # Step 3: stacking ensemble
@@ -223,44 +296,53 @@ def run_ensembling() -> dict[str, Any]:
     stack_oof = stack.predict_proba_horizons(oof_list)
     stack_test = stack.predict_proba_horizons(test_list)
     stack_metrics = compute_metrics(y, stack_oof)
-    logger.info("stacking_done", brier_oof=round(stack_metrics["brier_mean"], 5))
+    logger.info("stacking_done", hybrid_oof=round(stack_metrics["hybrid_score"], 5))
 
     # Step 4: blending (single holdout)
     logger.info("fitting_blending")
     holdout_base: list[pd.DataFrame] = []
     holdout_y: pd.DataFrame | None = None
     for member in member_names:
-        factory = _resolve_factory(member, tuned_params, model_defaults, seed)
+        factory = _resolve_factory(
+            member,
+            tuned_params,
+            model_defaults,
+            seed,
+            seed_ensemble_cfg,
+            feature_names=feature_cols,
+        )
         ho_preds, ho_y = _holdout_predictions(factory, X, y, holdout_size=0.25, seed=seed)
         holdout_base.append(ho_preds)
         holdout_y = ho_y
     assert holdout_y is not None
     blend = BlendingEnsemble(random_state=seed, C=1.0).fit(holdout_base, holdout_y)
-    # Evaluate on full OOF preds (train-time proxy) — note: this is a rough metric
     blend_oof = blend.predict_proba_horizons(oof_list)
     blend_test = blend.predict_proba_horizons(test_list)
     blend_metrics = compute_metrics(y, blend_oof)
-    logger.info("blending_done", brier_oof=round(blend_metrics["brier_mean"], 5))
+    logger.info("blending_done", hybrid_oof=round(blend_metrics["hybrid_score"], 5))
 
-    # Step 5: compare — include per-member OOF brier
+    # Step 5: compare — include per-member OOF Hybrid
+    member_metrics = {m: compute_metrics(y, oof_preds[m]) for m in member_names}
     results: dict[str, Any] = {
         "members": {
             m: {
-                "oof_brier_mean": float(compute_metrics(y, oof_preds[m])["brier_mean"]),
+                "oof_hybrid_score": float(member_metrics[m]["hybrid_score"]),
+                "oof_weighted_brier": float(member_metrics[m]["weighted_brier"]),
+                "oof_c_index": float(member_metrics[m]["c_index"]),
             }
             for m in member_names
         },
         "weighted_average": {
-            "oof_brier_mean": wa_metrics["brier_mean"],
+            "oof_hybrid_score": wa_metrics["hybrid_score"],
             "weights": weights_dict,
             "metrics": wa_metrics,
         },
         "stacking": {
-            "oof_brier_mean": stack_metrics["brier_mean"],
+            "oof_hybrid_score": stack_metrics["hybrid_score"],
             "metrics": stack_metrics,
         },
         "blending": {
-            "oof_brier_mean": blend_metrics["brier_mean"],
+            "oof_hybrid_score": blend_metrics["hybrid_score"],
             "metrics": blend_metrics,
         },
     }
@@ -283,34 +365,65 @@ def run_ensembling() -> dict[str, Any]:
                 "members": member_names,
                 "n_splits": n_splits,
                 "seed": seed,
-                "phase": 6,
+                "phase": 6.5,
+                "objective": "hybrid",
             },
             feature_list=feature_cols,
             model_artifact=None,
         )
 
-    # Step 7: pick best (lowest OOF Brier) among ensembles AND individual members
+    # Step 7: pick best (HIGHEST OOF Hybrid) among ensembles AND individual members
     candidates: dict[str, tuple[float, pd.DataFrame]] = {
-        "weighted_average": (wa_metrics["brier_mean"], wa_test),
-        "stacking": (stack_metrics["brier_mean"], stack_test),
-        "blending": (blend_metrics["brier_mean"], blend_test),
+        "weighted_average": (wa_metrics["hybrid_score"], wa_test),
+        "stacking": (stack_metrics["hybrid_score"], stack_test),
+        "blending": (blend_metrics["hybrid_score"], blend_test),
     }
     for m in member_names:
-        candidates[m] = (
-            float(compute_metrics(y, oof_preds[m])["brier_mean"]),
-            test_preds[m],
-        )
+        candidates[m] = (member_metrics[m]["hybrid_score"], test_preds[m])
 
-    best_name, (best_brier, best_test_preds) = min(candidates.items(), key=lambda kv: kv[1][0])
+    best_name, (best_hybrid, best_test_preds) = max(candidates.items(), key=lambda kv: kv[1][0])
     logger.info(
         "best_phase6",
         model=best_name,
-        oof_brier=round(best_brier, 5),
+        oof_hybrid=round(best_hybrid, 5),
     )
     results["best"] = {
         "model": best_name,
-        "oof_brier_mean": best_brier,
+        "oof_hybrid_score": best_hybrid,
     }
+
+    # Step 7.5: OPTIONAL isotonic calibration of best ensemble's OOF -> test
+    calibration_applied = False
+    if calibrate_output:
+        # Map best name back to its OOF predictions (for ensembles, recompute)
+        best_oof_map = {
+            "weighted_average": wa_oof,
+            "stacking": stack_oof,
+            "blending": blend_oof,
+            **{m: oof_preds[m] for m in member_names},
+        }
+        best_oof = best_oof_map[best_name]
+        calib = IsotonicHorizonCalibrator().fit(best_oof, y)
+        calibrated_test = calib.transform(best_test_preds)
+
+        calib_oof = calib.transform(best_oof)
+        calib_metrics = compute_metrics(y, calib_oof)
+        logger.info(
+            "calibration_applied",
+            best=best_name,
+            hybrid_before=round(best_hybrid, 5),
+            hybrid_after=round(calib_metrics["hybrid_score"], 5),
+            summary=calib.summary(),
+        )
+        # Accept calibration only if it improves OOF Hybrid
+        if calib_metrics["hybrid_score"] >= best_hybrid:
+            best_test_preds = calibrated_test
+            best_hybrid = calib_metrics["hybrid_score"]
+            calibration_applied = True
+        else:
+            logger.info("calibration_rejected_noimprovement")
+
+    results["calibration_applied"] = calibration_applied
 
     # Save best ensemble test predictions under "ensemble" name for submission
     pred_dir = Path(data_config["paths"]["predictions"])

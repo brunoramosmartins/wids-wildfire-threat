@@ -61,8 +61,7 @@ wids-wildfire-threat/
 ├── submissions/          # Kaggle submission CSVs (gitignored)
 ├── tests/                # Unit and integration tests
 ├── Makefile              # Pipeline orchestration
-├── pyproject.toml        # Project config (deps, ruff, mypy, pytest)
-└── requirements.txt      # Pinned dependencies
+└── pyproject.toml        # Single source of truth: deps, extras, ruff, mypy, pytest
 ```
 
 ## Tech Stack
@@ -82,10 +81,29 @@ wids-wildfire-threat/
 ## Development
 
 ```bash
-make install    # pip install -e ".[dev]" + pre-commit hooks
+make install    # pip install -e ".[dev,notebook]" + pre-commit hooks
 make lint       # ruff + mypy
 make test       # pytest
 make clean      # Remove __pycache__
+```
+
+### Dependency extras
+
+All Python dependencies are declared in `pyproject.toml` (no `requirements.txt`). Three extras groups:
+
+| Extra | Who needs it | Includes |
+|-------|--------------|----------|
+| (core) | Everyone | pandas, scikit-learn, XGBoost, lightgbm, catboost, lifelines, scikit-survival, MLflow, structlog, optuna, scipy, matplotlib, seaborn, plotly, pyarrow, pyyaml |
+| `[dev]` | Contributors + CI | ruff, mypy, pytest, pre-commit, types-PyYAML |
+| `[notebook]` | Local EDA/analysis | ipykernel, jupyter, nbconvert |
+| `[all]` | `[dev] + [notebook]` | everything |
+
+Examples:
+
+```bash
+pip install -e ".[dev]"            # lean CI install (no Jupyter)
+pip install -e ".[dev,notebook]"   # full local dev (default, used by make install)
+pip install -e ".[all]"            # same as above
 ```
 
 ## License

@@ -24,17 +24,28 @@ dependencies = [
     "plotly>=5.18.0",
     "pyarrow>=14.0.0",
     "pyyaml>=6.0",
+    "optuna>=3.5.0",
+    "scipy>=1.11.0",
 ]
 
 [project.optional-dependencies]
+# Code quality + testing (runs in CI; no Jupyter stack needed)
 dev = [
     "ruff>=0.3.0",
     "mypy>=1.8.0",
     "pytest>=8.0.0",
     "pre-commit>=3.6.0",
+    "types-PyYAML>=6.0",
+]
+# Jupyter stack (local EDA/analysis only; optional in CI)
+notebook = [
     "ipykernel>=6.29.0",
     "jupyter>=1.0.0",
-    "types-PyYAML>=6.0",
+    "nbconvert>=7.0.0",
+]
+# Convenience: install everything at once
+all = [
+    "wids-wildfire-threat[dev,notebook]",
 ]
 
 [tool.ruff]
@@ -49,6 +60,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "src/features/selection.py" = ["N803", "N806"]
 "tests/test_model_pipeline.py" = ["N803", "N806"]
 "tests/test_phase5_models.py" = ["N803", "N806"]
+"tests/test_ensemble.py" = ["N803", "N806"]
 
 [tool.ruff.format]
 quote-style = "double"

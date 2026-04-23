@@ -65,3 +65,40 @@ advanced:
 ensemble:
   method: "weighted_average"  # Options: weighted_average, stacking, blending
   weights: []  # Optimized on validation set
+  # Top 3 models for Phase 6 ensembling (ranked by Phase 5 CV Brier)
+  members:
+    - gradient_boosted_survival
+    - random_survival_forest
+    - xgboost
+  # Stacking meta-learner
+  meta_learner: "logistic_regression"
+
+tuning:
+  n_trials: 50
+  timeout_seconds: 1800  # 30 min per model cap
+  # Models to tune (top performers from Phase 5)
+  models:
+    - gradient_boosted_survival
+    - random_survival_forest
+    - xgboost
+  # Search spaces per model
+  search_spaces:
+    gradient_boosted_survival:
+      n_estimators: [80, 400]         # int range
+      learning_rate: [0.02, 0.25]     # float log-uniform
+      max_depth: [2, 5]               # int range
+      subsample: [0.6, 1.0]           # float
+      min_samples_split: [2, 10]      # int
+      min_samples_leaf: [1, 5]        # int
+    random_survival_forest:
+      n_estimators: [100, 400]
+      max_depth: [3, 12]
+      min_samples_split: [2, 12]
+      min_samples_leaf: [1, 8]
+    xgboost:
+      n_estimators: [100, 600]
+      max_depth: [3, 8]
+      learning_rate: [0.02, 0.25]
+      subsample: [0.6, 1.0]
+      colsample_bytree: [0.6, 1.0]
+      reg_lambda: [0.5, 10.0]         # float log-uniform

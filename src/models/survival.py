@@ -98,9 +98,7 @@ class CoxPHHorizonModel(BaseEstimator):
         if surv.shape[0] != n and surv.shape[1] == n:
             surv = surv.T
         elif surv.shape[0] != n:
-            raise ValueError(
-                f"Cox survival shape {surv.shape} incompatible with n_samples={n}"
-            )
+            raise ValueError(f"Cox survival shape {surv.shape} incompatible with n_samples={n}")
         out: dict[str, np.ndarray] = {}
         for h in HORIZONS:
             col = float(h)
@@ -257,6 +255,8 @@ def get_gbs_model(
     learning_rate: float = 0.1,
     max_depth: int = 3,
     subsample: float = 1.0,
+    min_samples_split: int = 2,
+    min_samples_leaf: int = 1,
     random_state: int = 42,
 ) -> GradientBoostedSurvivalHorizonModel:
     return GradientBoostedSurvivalHorizonModel(
@@ -264,5 +264,7 @@ def get_gbs_model(
         learning_rate=learning_rate,
         max_depth=max_depth,
         subsample=subsample,
+        min_samples_split=min_samples_split,
+        min_samples_leaf=min_samples_leaf,
         random_state=random_state,
     )

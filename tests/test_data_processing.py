@@ -34,9 +34,9 @@ def test_train_schema_matches() -> None:
     process_train()
     df = pd.read_parquet("data/processed/train_processed.parquet")
     for col, expected_dtype in TRAIN_SCHEMA.items():
-        assert (
-            str(df[col].dtype) == expected_dtype
-        ), f"{col}: expected {expected_dtype}, got {df[col].dtype}"
+        assert str(df[col].dtype) == expected_dtype, (
+            f"{col}: expected {expected_dtype}, got {df[col].dtype}"
+        )
 
 
 @_skip_no_data
@@ -45,9 +45,9 @@ def test_test_schema_matches() -> None:
     process_test()
     df = pd.read_parquet("data/processed/test_processed.parquet")
     for col, expected_dtype in TEST_SCHEMA.items():
-        assert (
-            str(df[col].dtype) == expected_dtype
-        ), f"{col}: expected {expected_dtype}, got {df[col].dtype}"
+        assert str(df[col].dtype) == expected_dtype, (
+            f"{col}: expected {expected_dtype}, got {df[col].dtype}"
+        )
 
 
 @_skip_no_data

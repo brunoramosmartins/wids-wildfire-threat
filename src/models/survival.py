@@ -87,7 +87,8 @@ class CoxPHHorizonModel(BaseEstimator):
 
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         probs = self.predict_proba_horizons(X)["prob_72h"].values
-        return (probs >= 0.5).astype(np.int32)
+        result: np.ndarray = (probs >= 0.5).astype(np.int32)
+        return result
 
     def predict_proba_horizons(self, X: pd.DataFrame | np.ndarray) -> pd.DataFrame:
         Xdf = self._prepare_predict_frame(X)
@@ -145,7 +146,8 @@ class _SkSurvEnsembleHorizonModel(BaseEstimator):
         num = num[self._feature_cols].fillna(self._train_medians_ if fit else self._train_medians_)
         if not fit:
             num = num.fillna(num.median())
-        return num.astype(np.float64).values
+        arr: np.ndarray = np.asarray(num.astype(np.float64).values, dtype=np.float64)
+        return arr
 
     def fit(
         self,
@@ -162,7 +164,8 @@ class _SkSurvEnsembleHorizonModel(BaseEstimator):
 
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         probs = self.predict_proba_horizons(X)["prob_72h"].values
-        return (probs >= 0.5).astype(np.int32)
+        result: np.ndarray = (probs >= 0.5).astype(np.int32)
+        return result
 
     def predict_proba_horizons(self, X: pd.DataFrame | np.ndarray) -> pd.DataFrame:
         if isinstance(X, np.ndarray):

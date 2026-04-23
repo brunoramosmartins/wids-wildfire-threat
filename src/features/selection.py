@@ -72,7 +72,11 @@ def select_features(df: pd.DataFrame, target: pd.Series) -> list[str]:
 
 def hit_within_72_labels(y: pd.DataFrame) -> np.ndarray:
     """Binary label: observed hit within 72h (for surrogate ranking / RFE)."""
-    return ((y["event"] == 1) & (y["time_to_hit_hours"] <= 72)).astype(np.int32).values
+    labels: np.ndarray = np.asarray(
+        ((y["event"] == 1) & (y["time_to_hit_hours"] <= 72)).astype(np.int32).values,
+        dtype=np.int32,
+    )
+    return labels
 
 
 def recursive_feature_elimination_top(
@@ -89,7 +93,7 @@ def recursive_feature_elimination_top(
         X_imp[c] = pd.factorize(X_imp[c])[0]
     n_feat = X_imp.shape[1]
     if n_features_to_select >= n_feat:
-        return X_imp.columns.tolist()
+        return list(X_imp.columns)
     step_use = max(1, min(step, n_feat - n_features_to_select))
     est = RandomForestClassifier(
         n_estimators=120,
@@ -99,7 +103,7 @@ def recursive_feature_elimination_top(
     )
     rfe = RFE(estimator=est, n_features_to_select=n_features_to_select, step=step_use)
     rfe.fit(X_imp, labels)
-    return X_imp.columns[rfe.support_].tolist()
+    return list(X_imp.columns[rfe.support_])
 
 
 def permutation_importance_ranking(

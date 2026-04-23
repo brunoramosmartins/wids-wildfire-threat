@@ -163,7 +163,8 @@ def optimize_weights(
     weights = np.clip(result.x, 0.0, 1.0)
     if weights.sum() <= 0:
         return x0
-    return weights / weights.sum()
+    normalized: np.ndarray = np.asarray(weights / weights.sum(), dtype=float)
+    return normalized
 
 
 class StackingEnsemble:

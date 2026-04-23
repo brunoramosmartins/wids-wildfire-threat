@@ -76,7 +76,8 @@ class _AFTHorizonBase(BaseEstimator):
 
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         probs = self.predict_proba_horizons(X)["prob_72h"].values
-        return (probs >= 0.5).astype(np.int32)
+        result: np.ndarray = (probs >= 0.5).astype(np.int32)
+        return result
 
     def predict_proba_horizons(self, X: pd.DataFrame | np.ndarray) -> pd.DataFrame:
         Xdf = self._prep_predict(X)

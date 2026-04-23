@@ -17,6 +17,8 @@ but not required for this dataset size.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -35,7 +37,10 @@ _TABPFN_IMPORT_ERROR_MSG = (
 )
 
 
-def _import_tabpfn() -> type:
+def _import_tabpfn() -> Any:
+    """Import TabPFNClassifier lazily. Return type is Any because the
+    real type is only known when the optional [advanced] extra is installed.
+    """
     try:
         from tabpfn import TabPFNClassifier  # type: ignore[import-not-found]
     except ImportError as e:
@@ -69,7 +74,9 @@ class TabPFNHorizonModel:
         self.device = device
         self.n_estimators = n_estimators
         self.random_state = random_state
-        self.models_: dict[int, object] = {}
+        # Value is TabPFNClassifier (or None when a horizon has no positives);
+        # typed as Any to avoid optional-dependency typing issues.
+        self.models_: dict[int, Any] = {}
         self._feature_cols: list[str] = []
 
     def fit(
@@ -105,7 +112,8 @@ class TabPFNHorizonModel:
 
     def predict(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
         probs = self.predict_proba_horizons(X)["prob_72h"].values
-        return (probs >= 0.5).astype(np.int32)
+        result: np.ndarray = (probs >= 0.5).astype(np.int32)
+        return result
 
     def predict_proba_horizons(self, X: pd.DataFrame | np.ndarray) -> pd.DataFrame:
         if isinstance(X, pd.DataFrame):

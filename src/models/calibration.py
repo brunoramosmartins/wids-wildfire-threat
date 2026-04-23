@@ -22,8 +22,6 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 import pandas as pd
 from sklearn.isotonic import IsotonicRegression
@@ -98,5 +96,5 @@ class IsotonicHorizonCalibrator:
         tgt = target_predictions if target_predictions is not None else oof_predictions
         return self.transform(tgt)
 
-    def summary(self) -> dict[str, Any]:
+    def summary(self) -> dict[int, str]:
         return {h: ("skipped" if iso is None else "fitted") for h, iso in self.calibrators_.items()}

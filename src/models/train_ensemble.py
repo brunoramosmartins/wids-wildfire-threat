@@ -53,11 +53,19 @@ PROB_COLS = [f"prob_{h}h" for h in HORIZONS]
 
 
 def _get_tabpfn_factory() -> Callable[..., HorizonPredictor] | None:
-    """Lazy import — tabpfn is in the optional [advanced] extra."""
+    """Lazy import — tabpfn is in the optional [advanced] extra.
+
+    ``get_tabpfn_model`` returns a ``TabPFNHorizonModel`` that structurally
+    satisfies the ``HorizonPredictor`` protocol (fit + predict_proba_horizons).
+    We cast because mypy can't see the structural match through the narrow
+    concrete return type.
+    """
+    from typing import cast
+
     try:
         from src.models.tabpfn_wrapper import get_tabpfn_model
 
-        return get_tabpfn_model
+        return cast(Callable[..., HorizonPredictor], get_tabpfn_model)
     except ImportError:
         return None
 

@@ -137,7 +137,9 @@ def train_model() -> None:
         ),
     }
 
-    results: dict[str, dict[str, float]] = {}
+    # Values can include ``None`` for metrics that the config disabled
+    # (e.g. missing keys in repeated-CV results), so we widen the type.
+    results: dict[str, dict[str, float | None]] = {}
 
     for model_name, (factory, params) in baselines.items():
         logger.info("training_model", model=model_name)

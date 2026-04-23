@@ -1,7 +1,7 @@
-.PHONY: install lint test process features train train-advanced predict evaluate submit pipeline pipeline-advanced features-select clean
+.PHONY: install lint test process features train train-advanced tune ensemble predict evaluate submit pipeline pipeline-advanced pipeline-final features-select clean
 
 install:
-	pip install -e ".[dev]"
+	pip install -e ".[dev,notebook]"
 	pre-commit install
 
 lint:
@@ -24,6 +24,12 @@ train:
 train-advanced:
 	python -m src.models.train_advanced
 
+tune:
+	python -m src.models.tune
+
+ensemble:
+	python -m src.models.train_ensemble
+
 features-select:
 	python -m src.features.selection
 
@@ -39,6 +45,8 @@ submit:
 pipeline: process features train predict evaluate submit
 
 pipeline-advanced: process features train train-advanced predict evaluate submit
+
+pipeline-final: process features train train-advanced tune ensemble submit
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +

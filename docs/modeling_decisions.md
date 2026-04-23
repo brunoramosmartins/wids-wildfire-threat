@@ -83,3 +83,41 @@ All baselines use a `MultiHorizonClassifier` wrapper that enforces monotonicity:
 - **Feature sparsity** — many fires show zero movement, reducing signal for those observations
 - **No geographic coordinates** — cannot use spatial modeling techniques
 - **Submission format** requires cumulative probabilities at 4 time points — must be monotonically non-decreasing
+
+## Phase 6 Decisions — Tuning, Ensembles, Error Analysis
+
+### Hyperparameter tuning (Optuna, TPE sampler)
+
+- Top 3 models from Phase 5 were tuned: `gradient_boosted_survival`, `random_survival_forest`, `xgboost`.
+- Budget: 50 trials per model, 30 min timeout each.
+- Search spaces defined in `configs/model_config.yaml → tuning.search_spaces`.
+- Objective: minimize mean CV Brier across 5 stratified folds.
+- All trial parameters/values logged to MLflow and `models/tuned_params.json`.
+
+### Ensemble methods
+
+Three ensembles built on the top-3 members (using tuned params when available):
+
+1. **Weighted average** — convex combination whose weights minimize mean CV Brier on OOF predictions (`scipy.optimize.SLSQP`).
+2. **Stacking** — per-horizon logistic-regression meta-learner trained on OOF base probabilities.
+3. **Blending** — same meta-learner shape, but base models are trained on a 75% slice and the meta-learner is fit on the remaining 25% holdout.
+
+All ensembles enforce monotonicity (P_12h ≤ P_24h ≤ P_48h ≤ P_72h) and clip to [0, 1].
+
+### Final model selection rule
+
+Lowest **OOF mean Brier** wins among:
+- The 3 ensemble variants above.
+- Each individual tuned member (in case a single model already beats the convex hull).
+
+Winner is written to `models/phase6_best.txt`; `models/phase5_best_model.txt` is updated so `make submit` picks up the Phase 6 winner without code changes.
+
+### Phase 6 Error Analysis
+
+`notebooks/05_error_analysis.ipynb` surfaces three systematic weaknesses on OOF predictions:
+
+1. **Distance-band concentration** — mid/long-distance fires (3rd–4th quartile of `dist_min_ci_0_5h`) contribute disproportionately to the total Brier. The kinetic features (`closing_speed`, `alignment_abs`) are noisier in that regime.
+2. **Rare-event horizons** — the 12h horizon has very few positive events in CV folds; calibration curves show the biggest deviation there. Any monotonicity-preserving smoothing that lifts 12h toward 24h helps.
+3. **Static fires** — samples where `is_closing=0`, `is_growing=0`, and `closing_speed≈0` are the hardest: the model has no kinetic signal, so predictions default to near the marginal event rate (~0.3), which scores poorly when the fire does hit late in the 72h window.
+
+These patterns inform Phase 7–8 observability checks (drift detection on kinetic features, calibration monitoring per horizon).

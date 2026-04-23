@@ -1,0 +1,5 @@
+{
+  "gradient_boosted_survival": 0.7133753862658545,
+  "random_survival_forest": 0.18807226745965017,
+  "xgboost": 0.09855234627449538
+}

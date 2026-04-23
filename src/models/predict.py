@@ -31,9 +31,12 @@ def _default_model_name() -> str:
 def predict(model_name: str | None = None) -> Path:
     """Generate predictions on test set using a trained MLflow model.
 
-    Args:
-        model_name: MLflow run name. If omitted, uses ``models/phase5_best_model.txt``
-            when present, otherwise ``random_forest``.
+    Special values for ``model_name``:
+
+    - ``None``: uses ``models/phase5_best_model.txt`` when present, else ``random_forest``.
+    - ``"ensemble"``: shortcuts to the already-written Phase 6 ensemble predictions
+      in ``data/predictions/predictions_ensemble.parquet`` (produced by
+      ``train_ensemble.py``). No MLflow lookup needed.
 
     Returns:
         Path to the saved predictions Parquet file.
@@ -42,6 +45,14 @@ def predict(model_name: str | None = None) -> Path:
         model_name = _default_model_name()
     config = load_config(Path("configs/model_config.yaml"))
     data_config = load_config(Path("configs/data_config.yaml"))
+
+    # Phase 6 shortcut: ensemble preds are materialized by train_ensemble.py
+    if model_name == "ensemble":
+        pred_path = Path(data_config["paths"]["predictions"]) / "predictions_ensemble.parquet"
+        if not pred_path.is_file():
+            raise FileNotFoundError(f"{pred_path} not found. Run `make ensemble` first.")
+        logger.info("ensemble_predictions_reused", path=str(pred_path))
+        return pred_path
 
     # Load test features
     feat_path = Path(data_config["paths"]["features"]) / data_config["feature_files"]["test"]
@@ -70,7 +81,7 @@ def predict(model_name: str | None = None) -> Path:
     )
     if not isinstance(runs_raw, pd.DataFrame):
         raise TypeError(
-            "mlflow.search_runs must return a pandas DataFrame; " f"got {type(runs_raw).__name__}"
+            f"mlflow.search_runs must return a pandas DataFrame; got {type(runs_raw).__name__}"
         )
     runs = runs_raw
 

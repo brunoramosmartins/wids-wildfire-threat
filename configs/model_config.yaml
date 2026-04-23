@@ -5,6 +5,8 @@ validation:
   strategy: "kfold"  # Options: kfold, temporal
   n_splits: 5
   shuffle: true
+  # Phase 6.5: repeated K-fold for variance reduction (0 = no repeats)
+  n_repeats: 0  # Set to 10 to enable 5×10 repeated CV in model selection
 
 models:
   logistic_regression:
@@ -65,17 +67,29 @@ advanced:
 ensemble:
   method: "weighted_average"  # Options: weighted_average, stacking, blending
   weights: []  # Optimized on validation set
-  # Top 3 models for Phase 6 ensembling (ranked by Phase 5 CV Brier)
+  # Phase 6.5 ensemble members (ranked by Hybrid Score CV).
+  # Adding diversity vs Phase 6: Weibull AFT (parametric), TabPFN (foundation),
+  # keeping GBS + RSF (tree-based survival).
   members:
     - gradient_boosted_survival
     - random_survival_forest
     - xgboost
+    - weibull_aft
+    # - tabpfn  # Enable if [advanced] extra is installed (pulls PyTorch ~500MB)
   # Stacking meta-learner
   meta_learner: "logistic_regression"
+  # Phase 6.5: apply isotonic calibration per horizon on ensemble output
+  calibrate_output: true
+  # Phase 6.5: wrap each member in a SeedEnsemble for variance reduction
+  seed_ensemble:
+    enabled: true
+    seeds: [42, 123, 2024, 7, 99]
 
 tuning:
   n_trials: 50
   timeout_seconds: 1800  # 30 min per model cap
+  # Phase 6.5: objective is Hybrid Score (maximize), not Brier (minimize)
+  objective: "hybrid"
   # Models to tune (top performers from Phase 5)
   models:
     - gradient_boosted_survival

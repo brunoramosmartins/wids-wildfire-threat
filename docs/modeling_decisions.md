@@ -121,3 +121,51 @@ Winner is written to `models/phase6_best.txt`; `models/phase5_best_model.txt` is
 3. **Static fires** — samples where `is_closing=0`, `is_growing=0`, and `closing_speed≈0` are the hardest: the model has no kinetic signal, so predictions default to near the marginal event rate (~0.3), which scores poorly when the fire does hit late in the 72h window.
 
 These patterns inform Phase 7–8 observability checks (drift detection on kinetic features, calibration monitoring per horizon).
+
+---
+
+## Phase 6.5 Decisions — Metric alignment + robustness
+
+### Competition metric realization (Phase 6.5 origin)
+
+Phase 6 was optimizing **mean Brier across 4 horizons (naive)**. The competition page (re-read after Phase 6 regression) specifies:
+
+```
+Hybrid = 0.3 × C-index + 0.7 × (1 − Weighted Brier)
+Weighted Brier = 0.3 × Brier@24h + 0.4 × Brier@48h + 0.3 × Brier@72h  (censor-aware)
+```
+
+Three substantive differences from what we optimized in Phase 6:
+
+1. **30% of the score is ranking** (C-index) — a pure Brier optimizer ignores this.
+2. **48h has 40% weight**, 24h and 72h 30% each; **12h is NOT in the score** (but still required in submission format).
+3. **Censor-aware Brier excludes** fires censored before the horizon — including them as 0 (what naive Brier does) biases toward under-prediction.
+
+This likely explains the Phase 6 LB regression: we moved probabilities to minimize naive Brier in regions where the censor-aware metric didn't reward us.
+
+### Phase 6.5 additions
+
+| Component | Module | Role |
+|-----------|--------|------|
+| Official metric | `src/models/evaluate.py` | `censor_aware_brier_at_horizon`, `weighted_brier_score`, `harrell_c_index`, `hybrid_score`; all reports anchored on it |
+| Hybrid-objective tuning | `src/models/tune.py` | Optuna maximizes Hybrid across 5-fold CV (was: minimize naive Brier) |
+| Hybrid-objective ensembling | `src/models/ensemble.py` | `optimize_weights(..., objective='hybrid')` via `scipy.optimize.SLSQP` |
+| Monotone constraints | `src/models/boosting.py` | Known physical priors (distance ↓, closing_speed ↑, alignment ↑, …) |
+| Seed ensembling | `src/models/seed_ensemble.py` | Wraps trees/boosters in 5-seed averaging |
+| Isotonic calibration | `src/models/calibration.py` | Per-horizon isotonic on OOF → test; applied only if it improves OOF Hybrid |
+| Weibull / LogNormal AFT | `src/models/aft.py` | Parametric survival members for diversity |
+| TabPFN wrapper | `src/models/tabpfn_wrapper.py` | Optional foundation-model member; pulls `[advanced]` extra |
+| Repeated 5×10 K-fold | `src/validation/repeated_cv.py` | √10 variance reduction on OOF estimates |
+| Nested CV | `src/validation/nested_cv.py` | Honest tuning estimate |
+| Adversarial validation | `src/validation/adversarial.py` | Covariate-shift detector train↔test |
+
+### Phase 6.5 validation strategy
+
+- **CV:** stratified 5-fold on `event`, repeated 10× for reporting only (not during tuning; tuning uses 5-fold for speed).
+- **Ensemble weight optimization:** on **OOF** Hybrid Score via SLSQP with simplex constraint.
+- **Calibration:** fit isotonic on OOF, apply to test predictions, but only **accept if OOF Hybrid does not regress** (guards against overfitting the calibrator on a tiny dataset).
+
+### Adversarial validation result
+
+- AUC train-vs-test = **0.41 ± 0.06** → **no meaningful shift**.
+- Implication: Phase 6's LB regression was not due to covariate shift. It was due to optimizing the wrong metric. Phase 6.5 fixes that directly.

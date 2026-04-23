@@ -137,4 +137,80 @@ Winner: **weighted_average** (0.02388, beats best single by ~0.00050). See `mode
 ### Notas de Fase 6 — gerais
 
 - **Overfit check:** o weighted_average só melhorou ~0.0005 sobre o GBS tuned sozinho no OOF; esse ganho não se traduziu no LB, confirmando o risco de shrinkage insuficiente.
+
+---
+
+## Phase 6.5 — Metric alignment + advanced techniques
+
+Motivação: a Fase 6 otimizava **Brier mean (4 horizontes, sem censura)**. A métrica oficial da competição é:
+
+```
+Hybrid = 0.3 × C-index + 0.7 × (1 − Weighted Brier)
+Weighted Brier = 0.3 × B@24h + 0.4 × B@48h + 0.3 × B@72h
+```
+
+…e a Brier é **censor-aware** (fires censurados antes do horizonte são EXCLUÍDOS, não somados como 0). Todo o tuning e seleção de modelo foram refeitos com essa métrica correta.
+
+Novidades adicionadas nesta fase:
+
+| Feature | Módulo | Motivação |
+|---------|--------|-----------|
+| Hybrid Score + censor-aware Brier | `src/models/evaluate.py` | Otimizar a métrica certa |
+| Monotone constraints (XGB/LGBM) | `src/models/boosting.py` | Sinais físicos conhecidos (distância ↓, closing_speed ↑, alignment ↑) reduzem overfit |
+| Isotonic calibration por horizonte | `src/models/calibration.py` | 70% da Hybrid é Brier → ganho direto se OOF mal calibrado |
+| Seed ensembling wrapper | `src/models/seed_ensemble.py` | Média de 5 seeds reduz variância estocástica em n=221 |
+| Weibull + LogNormal AFT | `src/models/aft.py` | Diversidade paramétrica vs boosters |
+| TabPFN (opcional) | `src/models/tabpfn_wrapper.py` | Modelo de fundação para dados tabulares pequenos |
+| Repeated 5×10 Stratified K-fold | `src/validation/repeated_cv.py` | √10 redução de variância na estimativa OOF |
+| Nested CV helper | `src/validation/nested_cv.py` | Diagnóstico de honestidade do tuning |
+| Adversarial validation | `src/validation/adversarial.py` | Detecta covariate shift train↔test |
+
+### Adversarial validation train↔test
+
+- **CV AUC:** 0.4132 ± 0.0619
+- **Verdict:** "No meaningful shift — train/test look drawn from the same distribution."
+
+**Conclusão:** não há covariate shift. Isso descarta sample-reweighting / subset selection como soluções rápidas. O gap OOF→LB do #3 era devido à métrica errada, não a drift de features.
+
+### Tuning com Hybrid objective (Optuna TPE, 50 trials, 5-fold CV)
+
+| Model | Fase 6 (Brier obj) Hybrid implícito | Fase 6.5 tuned Hybrid | Best params |
+|-------|-------------------------------------|-----------------------|-------------|
+| gradient_boosted_survival | — | **0.97352** | n_est=318, lr=0.049, depth=2, subsample=0.74, min_split=8, min_leaf=4 |
+| random_survival_forest | — | 0.96130 | n_est=384, depth=6, min_split=4, min_leaf=1 |
+| xgboost | — | 0.96909 | n_est=589, depth=6, lr=0.202, subsample=0.75, colsample=0.87, reg_lambda=0.51 |
+
+### Ensembles Fase 6.5 (OOF Hybrid Score, com seed ensembling + monotone constraints)
+
+| Candidato | OOF Hybrid | OOF Weighted Brier | OOF C-index |
+|-----------|-----------|--------------------|-------------|
+| **GBS tuned (5-seed ensemble)** | **0.97183** | ~0.018 | ~0.94 |
+| XGBoost tuned (5-seed ensemble) | 0.95840 | — | — |
+| RSF tuned (5-seed ensemble) | 0.96107 | — | — |
+| Weibull AFT | 0.88xx | 0.073 | — |
+| ensemble **weighted_average** | 0.96902 | 0.01456 | 0.93069 |
+| ensemble stacking | 0.96641 | 0.01601 | 0.92539 |
+| ensemble blending | 0.96068 | 0.02590 | 0.92936 |
+
+**Observações:**
+
+1. **GBS tuned sozinho venceu** — alinha com a suspeita do relatório de Fase 6 de que a mistura estava a puxar as probabilidades para regiões sub-ótimas.
+2. **Weighted_average identificou Weibull AFT como membro inútil** (peso final = 0.0) — sinal de que a optimização SLSQP funciona; a diversidade paramétrica não trouxe valor aqui.
+3. **Isotonic calibration foi REJEITADA** (OOF Hybrid caiu de 0.972 para 0.843 quando aplicada). Com só ~69 eventos e muitos sub-horizontes, o calibrador sobre-ajusta. Lógica de `calibrate_output=True ∧ only_if_improves_OOF` funcionou corretamente.
+4. **Stacking meta-learner degradou vs weighted_average** (0.966 vs 0.969) — confirmando a intuição da Fase 6 de que com n=221 não há graus de liberdade suficientes para um meta-learner por horizonte.
+
+### Entrada #4 — Phase 6.5 final submission
+
+| # | Date | Model | Features | Metric | CV Score | LB Score | Notes |
+|---|------|-------|----------|--------|----------|----------|-------|
+| 4 | 2026-04-23 | gradient_boosted_survival (5-seed, tuned, Hybrid obj) | 47 | Hybrid | **0.97183** (OOF) | *(preencher)* | File: `submissions/submission_gradient_boosted_survival_2026-04-23.csv`. Phase 6.5 — métrica alinhada + seed ensembling + monotone constraints. Best params: n_est=318, lr=0.049, depth=2, min_split=8, min_leaf=4. |
+
+### Summary Table — Phase 6.5 adicionada
+
+| # | Date | Model | CV Score (official metric) | LB Score | Δ vs prev |
+|---|------|-------|----------------------------|----------|-----------|
+| 1 | *(Fase 4)* | random_forest | 0.0268 ± 0.0109 (Brier) | 0.94801 | — |
+| 2 | *(Fase 5)* | gradient_boosted_survival | 0.0282 ± 0.0149 (Brier) | **0.96259** | +0.01458 |
+| 3 | 2026-04-22 | ensemble weighted_average (Brier-tuned) | 0.02388 (OOF Brier) | 0.96190 | −0.00069 |
+| 4 | 2026-04-23 | GBS (Hybrid-tuned, 5-seed, monotone) | **0.97183** (OOF Hybrid) | *(pendente)* | *(a medir)* |
 - **Erros sistemáticos** documentados em `notebooks/05_error_analysis.ipynb`: concentração em faixas de distância médias/longas, baixa calibração no horizonte 12h, fires estáticos (is_closing=0, is_growing=0).

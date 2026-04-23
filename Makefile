@@ -1,4 +1,4 @@
-.PHONY: install lint test process features train train-advanced tune ensemble predict evaluate submit pipeline pipeline-advanced pipeline-final features-select clean
+.PHONY: install lint test process features train train-advanced tune ensemble predict evaluate submit pipeline pipeline-advanced pipeline-final features-select adversarial clean
 
 install:
 	pip install -e ".[dev,notebook]"
@@ -32,6 +32,9 @@ ensemble:
 
 features-select:
 	python -m src.features.selection
+
+adversarial:
+	python -m src.validation.adversarial
 
 predict:
 	python -m src.models.predict

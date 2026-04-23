@@ -159,14 +159,16 @@ def train_advanced_models() -> None:
             results[model_name] = {
                 "seconds_train_log": round(elapsed, 2),
                 "n_features": len(feature_cols),
-                "brier_mean_cv": cv_metrics["brier_mean_mean"],
-                "brier_std_cv": cv_metrics["brier_mean_std"],
+                "hybrid_mean_cv": cv_metrics.get("hybrid_score_mean"),
+                "hybrid_std_cv": cv_metrics.get("hybrid_score_std"),
+                "weighted_brier_mean_cv": cv_metrics.get("weighted_brier_mean"),
+                "c_index_mean_cv": cv_metrics.get("c_index_mean"),
                 **{k: v for k, v in full_metrics.items() if isinstance(v, float)},
             }
             logger.info(
                 "advanced_model_ok",
                 model=model_name,
-                brier_cv=round(cv_metrics["brier_mean_mean"], 5),
+                hybrid_cv=round(cv_metrics.get("hybrid_score_mean", float("nan")), 5),
                 seconds=round(elapsed, 1),
             )
         except Exception:
@@ -187,16 +189,17 @@ def train_advanced_models() -> None:
     ok = {
         k: v
         for k, v in results.items()
-        if isinstance(v, dict) and "brier_mean_cv" in v and "error" not in v
+        if isinstance(v, dict) and "hybrid_mean_cv" in v and "error" not in v
     }
     if ok:
-        best = min(ok.items(), key=lambda kv: kv[1]["brier_mean_cv"])
+        # Best = highest Hybrid Score (official WiDS 2026 metric)
+        best = max(ok.items(), key=lambda kv: kv[1]["hybrid_mean_cv"] or -float("inf"))
         best_path = out_dir / "phase5_best_model.txt"
         best_path.write_text(best[0] + "\n", encoding="utf-8")
         logger.info(
             "phase5_best",
             model=best[0],
-            brier_cv=round(best[1]["brier_mean_cv"], 5),
+            hybrid_cv=round(best[1].get("hybrid_mean_cv", float("nan")), 5),
             path=str(best_path),
         )
 

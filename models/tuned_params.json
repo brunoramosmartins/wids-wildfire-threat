@@ -1,45 +1,45 @@
 {
   "gradient_boosted_survival": {
     "model": "gradient_boosted_survival",
-    "best_value": 0.02444670790405894,
+    "best_value": 0.9735206790742602,
     "best_params": {
-      "n_estimators": 293,
-      "learning_rate": 0.04510802835308742,
+      "n_estimators": 318,
+      "learning_rate": 0.04949784346982946,
       "max_depth": 2,
-      "subsample": 0.998406612698974,
-      "min_samples_split": 9,
-      "min_samples_leaf": 5
+      "subsample": 0.7354429808453083,
+      "min_samples_split": 8,
+      "min_samples_leaf": 4
     },
     "n_trials": 50,
     "n_completed": 50,
-    "seconds": 120.9
+    "seconds": 122.9
   },
   "random_survival_forest": {
     "model": "random_survival_forest",
-    "best_value": 0.02892891319815153,
+    "best_value": 0.9612984387842787,
     "best_params": {
-      "n_estimators": 169,
-      "max_depth": 10,
+      "n_estimators": 384,
+      "max_depth": 6,
       "min_samples_split": 4,
-      "min_samples_leaf": 2
+      "min_samples_leaf": 1
     },
     "n_trials": 50,
     "n_completed": 50,
-    "seconds": 126.9
+    "seconds": 151.6
   },
   "xgboost": {
     "model": "xgboost",
-    "best_value": 0.02788547825180517,
+    "best_value": 0.9690949726382243,
     "best_params": {
-      "n_estimators": 148,
+      "n_estimators": 589,
       "max_depth": 6,
-      "learning_rate": 0.03855481747322829,
-      "subsample": 0.6248054195969538,
-      "colsample_bytree": 0.6881514186914446,
-      "reg_lambda": 1.6581567505120278
+      "learning_rate": 0.20170132320090225,
+      "subsample": 0.7518416973680894,
+      "colsample_bytree": 0.8690317996453043,
+      "reg_lambda": 0.5140141724336237
     },
     "n_trials": 50,
     "n_completed": 50,
-    "seconds": 154.3
+    "seconds": 209.2
   }
 }

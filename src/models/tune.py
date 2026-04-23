@@ -35,16 +35,16 @@ logger = setup_logger(__name__)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def _cv_brier_mean(
+def _cv_hybrid_mean(
     factory: Callable[[], HorizonPredictor],
     X: pd.DataFrame,
     y: pd.DataFrame,
     n_splits: int,
     seed: int,
 ) -> float:
-    """Mean Brier across folds — objective for Optuna (minimize)."""
+    """Mean Hybrid Score across folds — objective for Optuna (maximize)."""
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-    brier_list: list[float] = []
+    scores: list[float] = []
     for train_idx, val_idx in skf.split(X, y["event"]):
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
@@ -52,8 +52,8 @@ def _cv_brier_mean(
         model.fit(X_tr, y_tr)
         preds = model.predict_proba_horizons(X_val)
         metrics = compute_metrics(y_val, preds)
-        brier_list.append(metrics["brier_mean"])
-    return float(np.mean(brier_list))
+        scores.append(metrics["hybrid_score"])
+    return float(np.mean(scores))
 
 
 # --- Per-model Optuna objectives ---
@@ -123,12 +123,12 @@ def _build_objective(
             return factory_fn(**params)
 
         try:
-            brier = _cv_brier_mean(model_factory, X, y, n_splits, seed)
+            hybrid = _cv_hybrid_mean(model_factory, X, y, n_splits, seed)
         except Exception as e:
             logger.warning("trial_failed", model=model_name, error=str(e)[:200])
             raise optuna.TrialPruned() from e
-        trial.set_user_attr("brier_mean_cv", brier)
-        return brier
+        trial.set_user_attr("hybrid_score_cv", hybrid)
+        return hybrid  # MAXIMIZED by Optuna (direction="maximize" below)
 
     return objective
 
@@ -155,7 +155,8 @@ def tune_model(
     )
 
     sampler = TPESampler(seed=seed)
-    study = optuna.create_study(direction="minimize", sampler=sampler)
+    # Maximize Hybrid Score (official WiDS 2026 metric)
+    study = optuna.create_study(direction="maximize", sampler=sampler)
 
     config = load_config(Path("configs/model_config.yaml"))
     experiment_name = config["experiment_name"]
@@ -206,7 +207,7 @@ def tune_model(
                 "seed": seed,
             }
         )
-        mlflow.log_metric("best_brier_mean_cv", best_value)
+        mlflow.log_metric("best_hybrid_score_cv", best_value)
         for k, v in best_params.items():
             mlflow.log_param(f"best_{k}", v)
         trials_df = study.trials_dataframe()
@@ -218,7 +219,7 @@ def tune_model(
     logger.info(
         "tuning_complete",
         model=model_name,
-        best_brier=round(best_value, 5),
+        best_hybrid=round(best_value, 5),
         best_params=best_params,
         n_trials_done=len(study.trials),
         n_completed=len(completed),
@@ -285,22 +286,6 @@ def run_tuning() -> dict[str, dict[str, Any]]:
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=2, default=str)
     logger.info("tuned_params_saved", path=str(out_path))
-
-    # Compare tuned vs Phase 5 baselines
-    adv_path = out_dir / "advanced_results.json"
-    if adv_path.is_file():
-        adv = json.loads(adv_path.read_text(encoding="utf-8"))
-        for m, r in all_results.items():
-            baseline_brier = adv.get(m, {}).get("brier_mean_cv")
-            if baseline_brier is not None:
-                delta = r["best_value"] - baseline_brier
-                logger.info(
-                    "tuning_delta",
-                    model=m,
-                    baseline=round(baseline_brier, 5),
-                    tuned=round(r["best_value"], 5),
-                    delta=round(delta, 5),
-                )
 
     return all_results
 

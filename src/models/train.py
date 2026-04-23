@@ -82,7 +82,8 @@ def _cross_validate(
             "fold_complete",
             model=model_name,
             fold=fold,
-            brier_mean=round(metrics["brier_mean"], 4),
+            hybrid=round(metrics.get("hybrid_score", float("nan")), 4),
+            weighted_brier=round(metrics.get("weighted_brier", float("nan")), 4),
         )
 
     # Aggregate fold metrics
@@ -96,8 +97,8 @@ def _cross_validate(
     logger.info(
         "cv_complete",
         model=model_name,
-        brier_mean=round(agg["brier_mean_mean"], 4),
-        brier_std=round(agg["brier_mean_std"], 4),
+        hybrid_mean=round(agg.get("hybrid_score_mean", float("nan")), 4),
+        hybrid_std=round(agg.get("hybrid_score_std", float("nan")), 4),
     )
 
     return agg
@@ -161,8 +162,10 @@ def train_model() -> None:
         )
 
         results[model_name] = {
-            "brier_mean_cv": cv_metrics["brier_mean_mean"],
-            "brier_std_cv": cv_metrics["brier_mean_std"],
+            "hybrid_mean_cv": cv_metrics.get("hybrid_score_mean"),
+            "hybrid_std_cv": cv_metrics.get("hybrid_score_std"),
+            "weighted_brier_mean_cv": cv_metrics.get("weighted_brier_mean"),
+            "c_index_mean_cv": cv_metrics.get("c_index_mean"),
             **full_metrics,
         }
 
@@ -175,11 +178,17 @@ def train_model() -> None:
 
     # Print summary
     for name, m in results.items():
+        hyb_mean = m.get("hybrid_mean_cv")
+        hyb_std = m.get("hybrid_std_cv")
         logger.info(
             "model_summary",
             model=name,
-            brier_cv=f"{m['brier_mean_cv']:.4f} +/- {m['brier_std_cv']:.4f}",
-            brier_full=f"{m['brier_mean']:.4f}",
+            hybrid_cv=(
+                f"{hyb_mean:.4f} +/- {hyb_std:.4f}"
+                if hyb_mean is not None and hyb_std is not None
+                else "n/a"
+            ),
+            hybrid_full=f"{m.get('hybrid_score', float('nan')):.4f}",
         )
 
 

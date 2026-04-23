@@ -76,34 +76,57 @@ def weighted_average(
     return enforce_monotonicity(result)
 
 
+def _labels_from_y(y: pd.DataFrame) -> np.ndarray:
+    """Binary labels at each horizon (hit within H). Shape (n, 4)."""
+    T = y["time_to_hit_hours"].values
+    E = y["event"].values
+    return np.column_stack([((E == 1) & (T <= h)).astype(np.int32) for h in HORIZONS])
+
+
 def _brier_of_weighted(
     weights: np.ndarray,
     preds_array: np.ndarray,  # shape (n_models, n_samples, n_horizons)
     labels: np.ndarray,  # shape (n_samples, n_horizons), binary
 ) -> float:
-    """Mean Brier across horizons for a convex combination of model preds."""
+    """Mean naive-Brier across horizons (legacy; used when objective='brier')."""
     w = weights / weights.sum()
-    combined = np.einsum("i,ijk->jk", w, preds_array)  # (n_samples, n_horizons)
-    # Monotonicity enforcement: cumulative max across horizons
+    combined = np.einsum("i,ijk->jk", w, preds_array)
     combined = np.maximum.accumulate(combined, axis=1).clip(0.0, 1.0)
     brier_per_h = np.mean((combined - labels) ** 2, axis=0)
     return float(np.mean(brier_per_h))
 
 
-def _labels_from_y(y: pd.DataFrame) -> np.ndarray:
-    """Binary labels: hit within each horizon, shape (n, 4)."""
-    T = y["time_to_hit_hours"].values
-    E = y["event"].values
-    labels = np.column_stack([((E == 1) & (T <= h)).astype(np.int32) for h in HORIZONS])
-    return labels
+def _neg_hybrid_of_weighted(
+    weights: np.ndarray,
+    preds_array: np.ndarray,  # (n_models, n_samples, n_horizons)
+    y: pd.DataFrame,
+) -> float:
+    """Negative Hybrid Score of a convex combination of model preds.
+
+    We negate so SLSQP (which minimizes) maximizes Hybrid.
+    Uses the official Hybrid Score from src.models.evaluate.
+    """
+    # Avoid circular import at module load
+    from src.models.evaluate import hybrid_score as _hybrid
+
+    w = weights / weights.sum()
+    combined = np.einsum("i,ijk->jk", w, preds_array)
+    combined = np.maximum.accumulate(combined, axis=1).clip(0.0, 1.0)
+    pred_df = pd.DataFrame(combined, columns=PROB_COLS, index=y.index)
+    h, _ = _hybrid(y, pred_df)
+    return -float(h)
 
 
 def optimize_weights(
     oof_predictions: list[pd.DataFrame],
     y: pd.DataFrame,
     seed: int = 42,
+    objective: str = "hybrid",
 ) -> np.ndarray:
-    """Find convex weights minimizing mean Brier on OOF predictions.
+    """Find convex weights optimizing the chosen objective on OOF predictions.
+
+    - ``objective='hybrid'``: MAXIMIZE Hybrid Score (official WiDS 2026 metric).
+    - ``objective='brier'``: MINIMIZE mean naive-Brier (legacy behavior).
 
     Uses SLSQP with sum-to-one constraint and non-negativity bounds.
     Returns normalized weights (sum = 1).
@@ -114,20 +137,23 @@ def optimize_weights(
     if n_models == 1:
         return np.array([1.0])
 
-    labels = _labels_from_y(y)
-    preds_array = np.stack(
-        [p[PROB_COLS].values for p in oof_predictions], axis=0
-    )  # (n_models, n_samples, n_horizons)
+    preds_array = np.stack([p[PROB_COLS].values for p in oof_predictions], axis=0)
 
-    # Initial: uniform weights
     x0 = np.ones(n_models) / n_models
     bounds = [(0.0, 1.0)] * n_models
     constraints = [{"type": "eq", "fun": lambda w: float(w.sum() - 1.0)}]
+    _ = seed  # symmetry only — SLSQP deterministic given x0
 
-    # SLSQP deterministic given x0; we pass seed for API symmetry only
-    _ = seed
+    if objective == "hybrid":
+        fun = lambda w: _neg_hybrid_of_weighted(w, preds_array, y)  # noqa: E731
+    elif objective == "brier":
+        labels = _labels_from_y(y)
+        fun = lambda w: _brier_of_weighted(w, preds_array, labels)  # noqa: E731
+    else:
+        raise ValueError(f"Unknown objective: {objective}")
+
     result = minimize(
-        fun=lambda w: _brier_of_weighted(w, preds_array, labels),
+        fun=fun,
         x0=x0,
         method="SLSQP",
         bounds=bounds,
